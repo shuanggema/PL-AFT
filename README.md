@@ -1,3 +1,6 @@
+# Method
+Partial-linear AFT model (PL-AFT)
+
 # Paper
 
 Integrating Genetic and Pathological Imaging Data for Cancer Prognosis with a DNN-based Semiparametric Model (forthcoming)
