@@ -141,3 +141,4 @@ def summarize_coefs_result(df_tab, r, q):
     df_num_inter = df_tab.iloc[r:(r*(q+1)), :].apply(np.sum, axis=0)
     return pd.DataFrame(dict(main=df_num_main, inter_IE=df_num_inter))
 
+

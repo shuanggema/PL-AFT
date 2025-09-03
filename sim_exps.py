@@ -9,8 +9,8 @@ if __name__ == "__main__":
     # =============================================  
     sim_schemes = pd.read_excel("sim_schemes_final.xlsx")  
     sim_schemes.index = sim_schemes["id"]  
-    rep_times = int(args.reps)    # repeat times for each setting
-    folder = f"./result/"   # folder for saving results
+    rep_times = int(args.reps)    # repeat times for each setting  
+    folder = f"./result/"   # folder for saving results  
     logger_file = os.path.join(folder, "training_7705.log")  
     # =============================================     
     if not os.path.exists(folder):  

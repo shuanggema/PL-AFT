@@ -1,0 +1,251 @@
+---
+title: "Data preparation for TCGA-LUAD"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(Hmisc)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+library(moments)
+```
+
+
+
+# Clinical Data
+```{r}
+clinical_file = "./raw_data/data_clinical_patient.txt" 
+clinical_LUAD = read.csv(clinical_file,sep="\t",skip=4)
+row.names(clinical_LUAD) = clinical_LUAD$PATIENT_ID 
+clinical_LUAD_info = read.csv(clinical_file,sep="\t",nrows = 4) 
+```
+
+```{r}
+clinical_tmp = clinical_LUAD[,c("AGE","SEX",
+                           "SMOKING_PACK_YEARS",
+                           "TOBACCO_SMOKING_HISTORY_INDICATOR",
+                           "AJCC_PATHOLOGIC_TUMOR_STAGE",
+                           "RACE",
+                           "OS_MONTHS","OS_STATUS")]
+colnames(clinical_tmp) =  c("AGE","SEX","SMOKING_PACK_YEARS",
+                            "SMOKING_HISTORY","Stage","RACE",
+                            "OS_MONTHS","OS_STATUS")
+clinical_tmp$OS_MONTHS = as.integer(clinical_tmp$OS_MONTHS)
+clinical_tmp$OS_STATUS = as.integer(clinical_tmp$OS_STATUS=="1:DECEASED")
+
+### age ####
+clinical_tmp$Age = as.integer(clinical_tmp$AGE)
+### sex ###
+clinical_tmp$Sex = as.integer(tolower(clinical_tmp$SEX)=="male")
+
+#### smoking related variables (Smoking1 and Smoking2) ####
+clinical_tmp$SMOKING_PACK_YEARS = as.integer(clinical_tmp$SMOKING_PACK_YEARS)
+clinical_tmp$SMOKING_HISTORY = as.integer(clinical_tmp$SMOKING_HISTORY)
+clinical_tmp$SMOKING_PACK_YEARS = as.integer(clinical_tmp$SMOKING_PACK_YEARS)
+# fill na for smoking_pack_years 
+#IF smoking history indicator==1, fill with 0; otherwise, fill with median value of the group
+clinical_tmp2=clinical_tmp[!(is.na(clinical_tmp$SMOKING_HISTORY)|is.na(clinical_tmp$SMOKING_PACK_YEARS)),]
+tab2 = clinical_tmp2 %>% group_by(SMOKING_HISTORY) %>%
+              summarise(pack_years=median(SMOKING_PACK_YEARS))
+fill_values = c(0,tab2$pack_years)  # SMOKING_PACK_YEARS=1 : non-smoker
+fill_v_unknown = median(clinical_tmp2$SMOKING_PACK_YEARS)
+clinical_tmp = clinical_tmp %>%
+  mutate(SMOKING_PACK_YEARS=ifelse(is.na(SMOKING_PACK_YEARS),fill_values[SMOKING_HISTORY],SMOKING_PACK_YEARS)) %>%
+  mutate(SMOKING_PACK_YEARS=ifelse(is.na(SMOKING_PACK_YEARS),fill_v_unknown,SMOKING_PACK_YEARS))
+
+# Smoking1: binary variable: non-smoker, reformed smoker for >15 yr : 0; else: 1
+clinical_tmp$Smoking1 = as.integer(!(clinical_tmp$SMOKING_HISTORY %in% c(1,3,5)))
+# Smoking1: continuous variable: smoking pack year
+clinical_tmp$Smoking2 = impute(clinical_tmp$SMOKING_HISTORY, median)
+
+#### stage ####
+cal_stage <- function(s)
+{
+  s = substr(s,7,30)
+  if(startsWith(s, "III")|startsWith(s, "IV")|startsWith(s, "IIB")){
+    return(3)
+  }else if(startsWith(s, "II")|startsWith(s, "IB")){
+    return(2)
+  }else if(startsWith(s, "I")){
+    return(1)
+  }else{
+    return(NaN)
+  }
+}
+clinical_tmp$Stage = sapply(clinical_tmp$Stage, cal_stage)
+
+#### output (clinical variables and survival outcome) ####
+clinical_output = clinical_tmp[c("Age", "Sex", "Smoking1", "Smoking2", "Stage",
+                                 "OS_MONTHS","OS_STATUS"
+                                 )]
+
+```
+
+```{r}
+clinical_output = clinical_output[apply(is.na(clinical_output),1,sum)==0,]
+clinical_output = clinical_output[clinical_output$OS_MONTHS>0, ]
+dim(clinical_output)
+```
+
+# Imaging
+```{r}
+X = read.csv("raw_data/imaging_features.csv",row.names=1)
+```
+
+```{r}
+clean_data_id <- function(x){
+  gsub("\\.","-",substr(x,1,12))
+}
+patient_id = sapply(row.names(X),clean_data_id)
+del_patient_id = which(duplicated(patient_id))
+if(length(del_patient_id) > 0){
+  X = X[-del_patient_id, ]  
+}
+row.names(X) = sapply(row.names(X),clean_data_id)
+```
+
+```{r}
+dim(X)
+```
+
+# Gene
+```{r}
+gene_file_LUAD = "./raw_data/data_mrna_seq_v2_rsem_zscores_ref_all_samples.txt"  
+Z = read.csv(gene_file_LUAD, sep="\t")
+```
+
+```{r}
+clean_gene_data <- function(Z){
+  del_idx = which(duplicated(Z$Hugo_Symbol)|is.na(Z$Hugo_Symbol))
+  Z = Z[-del_idx,]
+  row.names(Z) = Z$Hugo_Symbol
+  Z = Z[,-c(1,2)]
+  patient_id = sapply(colnames(Z),clean_data_id)
+  del_patient_id = which(duplicated(patient_id))
+  if(length(del_patient_id)>0){
+    Z = Z[,-del_patient_id]
+  }
+  colnames(Z) = sapply(colnames(Z),clean_data_id)
+  Z = t(Z)
+  return(Z)
+}
+
+Z = clean_gene_data(Z)
+print(dim(Z))
+```
+
+```{r}
+Z = Z[,apply(is.na(Z),2,sum)==0]
+
+# drop single variables
+max_portion <- function(s){
+  return(max(table(s))/length(s))
+}
+
+# drop skew
+del_cols2 = which(abs(apply(Z,2,max_portion))>0.7)
+del_cols4 = which(abs(apply(Z,2,skewness))>1.5)
+del_cols = unique(c(del_cols2, del_cols4))
+if(length(del_cols)>0){
+  Z = Z[,-del_cols]
+}
+
+dim(Z)
+```
+
+## Selection using pathway
+```{r}
+if(!requireNamespace("BiocManager", quietly = TRUE)){
+  install.packages("BiocManager")
+  BiocManager::install("KEGGREST")
+}
+library(KEGGREST)
+```
+
+
+```{r}
+pathway_genes <- function(pathway='hsa05223'){
+  org <- keggList('organism')
+  #head(org)
+  gs <- keggGet(pathway)
+  gs[[1]]$GENE
+  genes <- unlist(lapply(gs[[1]]$GENE, function(x) strsplit(x, ';')))
+  gene.list <- genes[1:length(genes)%%3==2]
+  gene.list <- data.frame(gene.list)  
+  return(unique(gene.list$gene.list))
+}
+
+genes_pathway = pathway_genes('hsa05200') # Pathways in cancer - Homo sapiens (human)
+```
+
+```{r}
+all_genes = colnames(Z)
+selected_genes = intersect(genes_pathway, all_genes)
+Z = Z[, selected_genes]
+```
+
+# Integrate clinical, imaging, and genomic data
+```{r}
+int_patients = intersect(row.names(clinical_output),row.names(X))
+int_patients = intersect(int_patients, row.names(Z))
+clinical_output = clinical_output[int_patients, ]  # Clinical variables and survival outcomes
+X = X[int_patients, ]  # Imaging features
+Z = Z[int_patients, ]  # Genomic features
+```
+
+```{r}
+clinical_scale_func <- function(clinical_output){
+  clinical_output_scale = clinical_output
+  clinical_output_scale$Age = scale(clinical_output$Age)
+  clinical_output_scale$Smoking2 = scale(clinical_output$Smoking2)
+  clinical_output_scale$Stage = scale(clinical_output$Stage)
+  return(clinical_output_scale)
+}
+
+clinical_output_scale = clinical_scale_func(clinical_output)
+E = clinical_output_scale[, c("Age", "Sex", "Smoking1", "Smoking2", "Stage")]
+survival_outcome = clinical_output_scale[, c("OS_MONTHS","OS_STATUS")]
+```
+
+```{r}
+X_scale = scale(X)  
+Z_scale = scale(Z)  
+clip_scale <- function(x, minn=-3, maxn=3){
+  x1 = x  
+  x1[x1 > maxn] = maxn  
+  x1[x1 < minn] = minn  
+  return((x1-minn) / (maxn - minn))
+}
+
+X_clip = clip_scale(X_scale, minn=-3, maxn=3)  
+Z_clip = clip_scale(Z_scale, minn=-3, maxn=3)  
+
+E_clip = E  
+E_clip[,1] = clip_scale(E_clip[,1], minn=-3, maxn=3)  # Age
+E_clip[,4] = clip_scale(E_clip[,4],                   # Smoking2
+                        minn=min(E[,4]), maxn=3)  
+E_clip[,5] = clip_scale(E_clip[,5],                   # Stage
+                        minn=min(E[,5]),
+                        maxn=max(E[,5])
+                        )  
+```
+
+# Save
+```{r}
+folder = "./processed_data/"
+
+# Imaging
+write.csv(X_clip, paste(folder, "X_clip.csv", sep=""))
+# Gene
+write.csv(Z_clip, paste(folder, "Z_clip.csv", sep=""))
+# Clinical feature
+write.csv(E_clip, paste(folder, "E_clip.csv", sep=""))
+# Survival outcome
+write.csv(survival_outcome, paste(folder, "survival_outcome.csv", sep=""))
+```
+

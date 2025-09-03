@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from utils import *
 from lassonet.cox import concordance_index  
-from evaluation import eval_linear_coef, eval_nonlinear
+from evaluation import eval_linear_coef, eval_nonlinear, evaluation_AUC
 
 
 # AFT model  
@@ -266,6 +266,18 @@ class Partial_Linear_DNN(nn.Module):
                                            )
             res.update(res_nonlinear)  
         return res
+
+    def evaluation_AUC(self, tra_Y_dic, test_Y_dic, tes_X_dic, time_points=None, **kwargs):
+        res = {}
+        # predict risk scores for test data
+        self.eval()
+        with torch.no_grad():
+            out = self(**tes_X_dic)
+        risk_scores = -out[0].detach().numpy()
+        # information of test data
+        res = evaluation_AUC(tra_Y_dic, test_Y_dic, risk_scores,      
+                             time_points=time_points, **kwargs)
+        return res  
 
     def num_nonzero(self):
         """
