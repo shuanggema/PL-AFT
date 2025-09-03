@@ -49,4 +49,7 @@
 The related code can be found in `real_data_analysis.py`. The code contains the following steps:
 * Data read and preprocessing
 * The 100 random experiments, including data splitting, model fitting, and model evaluation. We also output the estimated linear coefficients and the variable selection reuslts for the nonlinear parts.  
-* The related code can be found in `real_data_analysis.py`, which use the processed data from folder `./processed_data`, and output the results in folder `/real_data_results`. 
+* The related code can be found in `real_data_analysis.py`, which use the processed data from folder `./processed_data`, and output the results in folder `/real_data_results`. Here, we have the following files:
+    * `0_result.csv`: the C-index result
+    * `0_coefs_linear.npy`: the estimated linear coefficients for different methods
+    * `0_coefs_nonlinear.npy`: the variable selection results for the nonlinear part for different methods

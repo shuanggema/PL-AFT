@@ -168,7 +168,7 @@ def sim_multi_times_real_data(seed_lst, real_data, kwargs, cores=None, folder_pa
 
 if __name__ == "__main__":
     # =============================================  
-    rep_times = 2
+    rep_times = 100
     folder = f"./Real_data_analysis/real_data_result/"      # folder for saving results
     logger_file = os.path.join(folder, "training_7705.log")  
     # =============================================  
