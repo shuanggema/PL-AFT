@@ -3,7 +3,7 @@ Partial-linear AFT model (PL-AFT)
 
 # Paper
 
-Integrating Genetic and Pathological Imaging Data for Cancer Prognosis with a DNN-based Semiparametric Model (forthcoming)
+DNN-based Semiparametric AFT Model for Integrating Genomic and Pathological Imaging Data in Cancer Prognosis
 
 # Maintainer
 
@@ -48,6 +48,8 @@ Jingmao Li,  [jingmao.li@yale.edu](jingmao.li@yale.edu)
 * `utils.py`  
   Some util functions used in the project. 
 
+* Folder `Real_data_analysis/`  
+  The detailed process for real data analysis, including data download, data preparation, and analysis are presented in this folder. Please refer to the `README.md` file in the folder for more details.
 # Usage
 
 * Use the command line to conduct the simulation under the specific setting (indexed by parameter `--id`) in `sim_schemes_final.xlsx`. Another parameter `--reps` represents the number of replications for the simulation, e.g., 20, 100.  
